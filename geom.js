@@ -288,19 +288,40 @@ const CUBE_EDGES = [
 function edgesOf(pts) { return CUBE_EDGES.map(([a, b, family]) => ({ a, b, family })); }
 const moveBy = (P, d, len) => ({ x: P.x + d.x * len, y: P.y + d.y * len });
 
-// Generate a random plausible cube to trace: two finite vanishing points
-// (left/right) and a vertical axis at infinity — a natural 2-point view.
-// Returns { pts, edges } in canvas coordinates, or null if it lands degenerate.
+// Generate a random plausible cube to trace, with varied viewing angles:
+// asymmetric left/right vanishing points (rotation), varied eye level, and
+// ~40% three-point (tilt up/down). Retries until it lands on-canvas.
 export function generateCube(w, h, rand = Math.random) {
-  const cx = w / 2, cy = h * 0.5;
-  const reach = Math.max(w, 760);
+  let last = null;
+  for (let i = 0; i < 24; i++) {
+    const c = buildRandomCube(w, h, rand);
+    if (!c) continue;
+    last = c;
+    if (Object.values(c.pts).every((p) => p.x > 8 && p.x < w - 8 && p.y > 8 && p.y < h - 8)) return c;
+  }
+  return last;
+}
+
+function buildRandomCube(w, h, rand) {
+  const cx = w / 2, base = Math.max(w, 760);
+  const eyeY = h * 0.5 + (rand() - 0.5) * h * 0.25;
+  // independent reach per side: a closer VP foreshortens that face -> more angle
+  const reachR = base * (0.7 + rand() * 1.6);
+  const reachL = base * (0.7 + rand() * 1.6);
+  let vertical;
+  if (rand() < 0.4) { // three-point: tilt up or down
+    const ud = rand() < 0.5 ? -1 : 1;
+    vertical = { atInfinity: false, x: cx + (rand() - 0.5) * 0.2 * w, y: eyeY + ud * base * (1.2 + rand() * 1.2) };
+  } else {
+    vertical = { atInfinity: true, dx: 0, dy: -1 };
+  }
   const vps = [
-    { atInfinity: false, x: cx + reach * (1.1 + rand() * 0.7), y: cy + (rand() - 0.5) * h * 0.18 },
-    { atInfinity: false, x: cx - reach * (1.1 + rand() * 0.7), y: cy + (rand() - 0.5) * h * 0.18 },
-    { atInfinity: true, dx: 0, dy: -1 },
+    { atInfinity: false, x: cx + reachR, y: eyeY + (rand() - 0.5) * h * 0.1 },
+    { atInfinity: false, x: cx - reachL, y: eyeY + (rand() - 0.5) * h * 0.1 },
+    vertical,
   ];
-  const size = Math.min(w, h) * 0.22 * (0.8 + rand() * 0.5);
-  const P000 = { x: cx + (rand() - 0.5) * 80, y: cy + size * 0.4 };
+  const size = Math.min(w, h) * 0.22 * (0.85 + rand() * 0.5);
+  const P000 = { x: cx + (rand() - 0.5) * 0.18 * w, y: eyeY + size * 0.4 };
   const P100 = moveBy(P000, dirToward(P000, vps[0]), size);
   const P010 = moveBy(P000, dirToward(P000, vps[1]), size);
   const P001 = moveBy(P000, dirToward(P000, vps[2]), size);
