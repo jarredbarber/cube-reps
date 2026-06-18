@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Cube Reps</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="paper"></canvas>
+
+  <header id="wordmark">CUBE&nbsp;REPS<span class="tick">/ perspective practice</span></header>
+
+  <section id="readout" hidden aria-live="polite">
+    <div class="score"><b id="scoreNum">0</b><small>SCORE</small></div>
+    <div class="subs">
+      <div><span id="convNum">—</span><label>converge</label></div>
+      <div><span id="straightNum">—</span><label>straight</label></div>
+      <div><span id="ppNum">—</span><label>view</label></div>
+    </div>
+  </section>
+
+  <nav id="tools">
+    <button id="score" class="primary">Score</button>
+    <button id="keep">Keep</button>
+    <button id="undo">Undo</button>
+    <button id="wipe">Wipe</button>
+    <button id="clear" class="ghost">Clear sheet</button>
+  </nav>
+
+  <p id="hint">Draw a cube edge-by-edge with the pencil — one stroke per edge. Then tap Score.</p>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
