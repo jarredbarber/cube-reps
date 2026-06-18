@@ -286,52 +286,53 @@ const CUBE_EDGES = [
   ['000', '001', 2], ['100', '101', 2], ['010', '011', 2], ['110', '111', 2],
 ];
 function edgesOf(pts) { return CUBE_EDGES.map(([a, b, family]) => ({ a, b, family })); }
-const moveBy = (P, d, len) => ({ x: P.x + d.x * len, y: P.y + d.y * len });
 
-// Generate a random plausible cube to trace, with varied viewing angles:
-// asymmetric left/right vanishing points (rotation), varied eye level, and
-// ~40% three-point (tilt up/down). Retries until it lands on-canvas.
+// Generate a random cube to trace by building a real 3D cube, rotating it by a
+// random yaw/pitch (genuine orientation variety), and projecting it. The 3
+// vanishing points fall out of the axis directions. Retries until on-canvas.
+// Returns { pts, edges, vps }.
 export function generateCube(w, h, rand = Math.random) {
   let last = null;
   for (let i = 0; i < 24; i++) {
-    const c = buildRandomCube(w, h, rand);
-    if (!c) continue;
+    const c = projectCube(w, h, rand);
     last = c;
-    if (Object.values(c.pts).every((p) => p.x > 8 && p.x < w - 8 && p.y > 8 && p.y < h - 8)) return c;
+    if (Object.values(c.pts).every((p) => p.x > 10 && p.x < w - 10 && p.y > 10 && p.y < h - 10)) return c;
   }
   return last;
 }
 
-function buildRandomCube(w, h, rand) {
-  const cx = w / 2, base = Math.max(w, 760);
-  const eyeY = h * 0.5 + (rand() - 0.5) * h * 0.25;
-  // independent reach per side: a closer VP foreshortens that face -> more angle
-  const reachR = base * (0.7 + rand() * 1.6);
-  const reachL = base * (0.7 + rand() * 1.6);
-  let vertical;
-  if (rand() < 0.4) { // three-point: tilt up or down
-    const ud = rand() < 0.5 ? -1 : 1;
-    vertical = { atInfinity: false, x: cx + (rand() - 0.5) * 0.2 * w, y: eyeY + ud * base * (1.2 + rand() * 1.2) };
-  } else {
-    vertical = { atInfinity: true, dx: 0, dy: -1 };
+function projectCube(w, h, rand) {
+  const cx = w / 2, cy = h * 0.5;
+  const f = Math.min(w, h) * 1.15;            // focal length (px)
+  const dist = 3.0 + rand() * 1.4;            // camera distance (cube units)
+  const yaw = (rand() < 0.5 ? 1 : -1) * (0.3 + rand() * 0.95); // ~17-72 deg, either side
+  const pitch = (rand() - 0.5) * 0.85;        // look down/up
+  const cw = Math.cos(yaw), sw = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+
+  // Rotate (yaw about vertical Y, then pitch about X), push in front of camera.
+  const rot = (x, y, z) => {
+    const x1 = x * cw + z * sw, z1 = -x * sw + z * cw;
+    return { x: x1, y: y * cp - z1 * sp, z: y * sp + z1 * cp };
+  };
+  const proj = (p) => ({ x: cx + f * p.x / (p.z + dist), y: cy - f * p.y / (p.z + dist) });
+
+  // Vertex (i,j,k): i=axis0 (x), j=axis1 (depth z), k=axis2 (vertical y).
+  const pts = {};
+  for (const i of [0, 1]) for (const j of [0, 1]) for (const k of [0, 1]) {
+    pts[`${i}${j}${k}`] = proj(rot(i - 0.5, k - 0.5, j - 0.5));
   }
-  const vps = [
-    { atInfinity: false, x: cx + reachR, y: eyeY + (rand() - 0.5) * h * 0.1 },
-    { atInfinity: false, x: cx - reachL, y: eyeY + (rand() - 0.5) * h * 0.1 },
-    vertical,
-  ];
-  const size = Math.min(w, h) * 0.22 * (0.85 + rand() * 0.5);
-  const P000 = { x: cx + (rand() - 0.5) * 0.18 * w, y: eyeY + size * 0.4 };
-  const P100 = moveBy(P000, dirToward(P000, vps[0]), size);
-  const P010 = moveBy(P000, dirToward(P000, vps[1]), size);
-  const P001 = moveBy(P000, dirToward(P000, vps[2]), size);
-  const P110 = intersect(P100, dirToward(P100, vps[1]), P010, dirToward(P010, vps[0]));
-  const P101 = intersect(P100, dirToward(P100, vps[2]), P001, dirToward(P001, vps[0]));
-  const P011 = intersect(P010, dirToward(P010, vps[2]), P001, dirToward(P001, vps[1]));
-  if (!P110 || !P101 || !P011) return null;
-  const P111 = intersect(P110, dirToward(P110, vps[2]), P101, dirToward(P101, vps[1]));
-  if (!P111) return null;
-  const pts = { '000': P000, '100': P100, '010': P010, '001': P001,
-                '110': P110, '101': P101, '011': P011, '111': P111 };
-  return { pts, edges: edgesOf(pts) };
+
+  // Vanishing point per axis = image of that axis direction at infinity.
+  // rot args are (x_horiz, y_vert, z_depth); families 0,1,2 = x, depth, vertical.
+  const axisDirs = [[1, 0, 0], [0, 0, 1], [0, 1, 0]];
+  const vps = axisDirs.map(([ax, ay, az]) => {
+    const d = rot(ax, ay, az);
+    if (Math.abs(d.z) < 1e-4) {              // parallel in image -> at infinity
+      const n = Math.hypot(d.x, d.y) || 1;
+      return { atInfinity: true, dx: d.x / n, dy: -d.y / n };
+    }
+    return { atInfinity: false, x: cx + f * d.x / d.z, y: cy - f * d.y / d.z };
+  });
+
+  return { pts, edges: edgesOf(pts), vps };
 }

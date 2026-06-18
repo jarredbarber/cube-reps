@@ -109,7 +109,17 @@ assert(gen && gen.edges.length === 12, 'generateCube should return a 12-edge cub
 for (const k of Object.keys(gen.pts)) {
   const p = gen.pts[k];
   assert(Number.isFinite(p.x) && Number.isFinite(p.y), `generated corner ${k} not finite`);
-  assert(p.x > -200 && p.x < 1224 && p.y > -200 && p.y < 968, `generated corner ${k} off-canvas`);
+  assert(p.x > 0 && p.x < 1024 && p.y > 0 && p.y < 768, `generated corner ${k} off-canvas`);
+}
+// Each edge must converge to its family's vanishing point (validates 3D->VP).
+for (const e of gen.edges) {
+  const vp = gen.vps[e.family];
+  if (vp.atInfinity) continue;
+  const a = gen.pts[e.a], b = gen.pts[e.b];
+  const ed = norm({ x: b.x - a.x, y: b.y - a.y });
+  const tv = norm({ x: vp.x - a.x, y: vp.y - a.y });
+  const cross = Math.abs(ed.x * tv.y - ed.y * tv.x); // ~0 when collinear with VP
+  assert(cross < 1e-6, `generated edge ${e.a}-${e.b} does not aim at VP (cross=${cross})`);
 }
 
 console.log(`OK  perfect=${sPerfect.score}  skewed=${sSkewed.score}  wobbly=${sWobbly.score}  overlay=reconstructed  gen=ok`);

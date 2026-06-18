@@ -109,10 +109,35 @@ function draw() {
   else drawStrokes(active, INK, null);
 }
 
-// Faint cube to trace over (trace mode).
+// Faint cube to trace over, with its vanishing lines (trace mode).
 function drawTarget(t) {
+  // 1. vanishing lines: extend each edge out to its family's VP
   ctx.save();
-  ctx.strokeStyle = 'rgba(30,91,255,0.22)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(30,91,255,0.10)'; ctx.lineWidth = 1; ctx.setLineDash([4, 7]);
+  for (const e of t.edges) {
+    const vp = t.vps?.[e.family];
+    if (!vp || vp.atInfinity) continue;
+    const a = t.pts[e.a], b = t.pts[e.b];
+    const start = Math.hypot(vp.x - a.x, vp.y - a.y) > Math.hypot(vp.x - b.x, vp.y - b.y) ? a : b;
+    ctx.beginPath(); ctx.moveTo(start.x, start.y); ctx.lineTo(vp.x, vp.y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 2. VP crosshairs when on-screen
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30,91,255,0.35)'; ctx.lineWidth = 1.2;
+  for (const vp of t.vps || []) {
+    if (vp.atInfinity || vp.x < 0 || vp.x > W || vp.y < 0 || vp.y > H) continue;
+    ctx.beginPath();
+    ctx.moveTo(vp.x - 8, vp.y); ctx.lineTo(vp.x + 8, vp.y);
+    ctx.moveTo(vp.x, vp.y - 8); ctx.lineTo(vp.x, vp.y + 8);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 3. the cube to trace
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30,91,255,0.32)'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
   for (const e of t.edges) {
     const a = t.pts[e.a], b = t.pts[e.b];
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
