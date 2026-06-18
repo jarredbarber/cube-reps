@@ -1,7 +1,7 @@
 // Self-check: a near-perfect cube scores high; a skewed one scores lower.
 // Run: node test_geom.mjs
 import assert from 'node:assert';
-import { fitLine, groupByVP, scoreCube, reconstructCube } from './geom.js';
+import { fitLine, groupByVP, scoreCube, reconstructCube, generateCube } from './geom.js';
 
 // Build straight strokes for 3 edge families, each aimed at a vanishing point.
 const VPS = [{ x: 2000, y: 300 }, { x: -1500, y: 400 }, { x: 400, y: 6000 }];
@@ -102,4 +102,14 @@ const par = [fitLine([{ x: 0, y: 0 }, { x: 100, y: 1 }]),
              fitLine([{ x: 0, y: 120 }, { x: 100, y: 121 }])];
 assert(reconstructCube(par, [0, 0, 0]).ok === false, 'degenerate input should fall back to B');
 
-console.log(`OK  perfect=${sPerfect.score}  skewed=${sSkewed.score}  wobbly=${sWobbly.score}  overlay=reconstructed`);
+// ---- Trace target generation ----------------------------------------------
+// A generated cube must have 8 finite, on-canvas corners and 12 edges.
+const gen = generateCube(1024, 768, () => 0.5);
+assert(gen && gen.edges.length === 12, 'generateCube should return a 12-edge cube');
+for (const k of Object.keys(gen.pts)) {
+  const p = gen.pts[k];
+  assert(Number.isFinite(p.x) && Number.isFinite(p.y), `generated corner ${k} not finite`);
+  assert(p.x > -200 && p.x < 1224 && p.y > -200 && p.y < 968, `generated corner ${k} off-canvas`);
+}
+
+console.log(`OK  perfect=${sPerfect.score}  skewed=${sSkewed.score}  wobbly=${sWobbly.score}  overlay=reconstructed  gen=ok`);

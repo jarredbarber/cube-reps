@@ -264,12 +264,6 @@ export function reconstructCube(lines, assign) {
 
   const pts = { '000': P000, '100': P100, '010': P010, '001': P001,
                 '110': P110, '101': P101, '011': P011, '111': P111 };
-  // 12 cube edges, labeled by the axis (family) they run along.
-  const edges = [
-    ['000', '100', 0], ['010', '110', 0], ['001', '101', 0], ['011', '111', 0],
-    ['000', '010', 1], ['100', '110', 1], ['001', '011', 1], ['101', '111', 1],
-    ['000', '001', 2], ['100', '101', 2], ['010', '011', 2], ['110', '111', 2],
-  ].map(([a, b, family]) => ({ a, b, family }));
 
   // Guard: if the constructed cube doesn't actually fit the drawn strokes
   // (bad topology, mislabel, over-merge), reject so the caller draws B instead.
@@ -280,7 +274,43 @@ export function reconstructCube(lines, assign) {
     for (const p of ideal) dm = Math.min(dm, Math.hypot(p.x - e[0], p.y - e[1]));
     res += dm; nE++;
   }
-  if (res / nE > 0.35 * med) return { ok: false, corners };
+  if (res / nE > 0.5 * med) return { ok: false, corners }; // loosened for messy real strokes
 
-  return { ok: true, pts, edges, vps };
+  return { ok: true, pts, edges: edgesOf(pts), vps };
+}
+
+// 12 cube edges, labeled by the axis (family) they run along.
+const CUBE_EDGES = [
+  ['000', '100', 0], ['010', '110', 0], ['001', '101', 0], ['011', '111', 0],
+  ['000', '010', 1], ['100', '110', 1], ['001', '011', 1], ['101', '111', 1],
+  ['000', '001', 2], ['100', '101', 2], ['010', '011', 2], ['110', '111', 2],
+];
+function edgesOf(pts) { return CUBE_EDGES.map(([a, b, family]) => ({ a, b, family })); }
+const moveBy = (P, d, len) => ({ x: P.x + d.x * len, y: P.y + d.y * len });
+
+// Generate a random plausible cube to trace: two finite vanishing points
+// (left/right) and a vertical axis at infinity — a natural 2-point view.
+// Returns { pts, edges } in canvas coordinates, or null if it lands degenerate.
+export function generateCube(w, h, rand = Math.random) {
+  const cx = w / 2, cy = h * 0.5;
+  const reach = Math.max(w, 760);
+  const vps = [
+    { atInfinity: false, x: cx + reach * (1.1 + rand() * 0.7), y: cy + (rand() - 0.5) * h * 0.18 },
+    { atInfinity: false, x: cx - reach * (1.1 + rand() * 0.7), y: cy + (rand() - 0.5) * h * 0.18 },
+    { atInfinity: true, dx: 0, dy: -1 },
+  ];
+  const size = Math.min(w, h) * 0.22 * (0.8 + rand() * 0.5);
+  const P000 = { x: cx + (rand() - 0.5) * 80, y: cy + size * 0.4 };
+  const P100 = moveBy(P000, dirToward(P000, vps[0]), size);
+  const P010 = moveBy(P000, dirToward(P000, vps[1]), size);
+  const P001 = moveBy(P000, dirToward(P000, vps[2]), size);
+  const P110 = intersect(P100, dirToward(P100, vps[1]), P010, dirToward(P010, vps[0]));
+  const P101 = intersect(P100, dirToward(P100, vps[2]), P001, dirToward(P001, vps[0]));
+  const P011 = intersect(P010, dirToward(P010, vps[2]), P001, dirToward(P001, vps[1]));
+  if (!P110 || !P101 || !P011) return null;
+  const P111 = intersect(P110, dirToward(P110, vps[2]), P101, dirToward(P101, vps[1]));
+  if (!P111) return null;
+  const pts = { '000': P000, '100': P100, '010': P010, '001': P001,
+                '110': P110, '101': P101, '011': P011, '111': P111 };
+  return { pts, edges: edgesOf(pts) };
 }
